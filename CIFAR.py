@@ -234,9 +234,9 @@ def to_data(x):
 # Generate 10 random composite SNR values
 # First generate traditional SNR, distance, and relative speed
 random.seed(42)  # For reproducibility
-snr_trad_values = [random.uniform(10, 30) for _ in range(10)]
-distance_values = [random.uniform(1, 200) for _ in range(10)]  # 1 to 200 meters
-rel_speed_values = [random.uniform(0, 50) for _ in range(10)]  # 0 to 50 m/s (0 to 180 km/h)
+snr_trad_values = [random.uniform(20, 40) for _ in range(10)]
+distance_values = [random.uniform(1, 100) for _ in range(10)]  # 1 to 100 meters
+rel_speed_values = [random.uniform(0, 25) for _ in range(10)]  # 0 to 25 m/s (0 to 90 km/h)
 
 # Compute composite SNR values
 snr_values = []
