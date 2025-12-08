@@ -229,7 +229,7 @@ class RLAgent:
     def load_model(self, filepath):
         """Load the Q-network state"""
         if os.path.exists(filepath):
-            checkpoint = torch.load(filepath, map_location=self.device)
+            checkpoint = torch.load(filepath, map_location=self.device, weights_only=False)
             self.q_network.load_state_dict(checkpoint['q_network'])
             self.target_network.load_state_dict(checkpoint['target_network'])
             self.optimizer.load_state_dict(checkpoint['optimizer'])
