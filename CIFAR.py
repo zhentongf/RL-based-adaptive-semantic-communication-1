@@ -30,7 +30,7 @@ import time
 import warnings
 import argparse
 import imageio
-from rl_agent import RLAgent
+from fuzzy_logic import decide_use_nn
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings("ignore")
@@ -257,28 +257,7 @@ print("Distance values (m):", [f"{d:.1f}" for d in distance_values])
 print("Relative speed values (m/s):", [f"{v:.1f}" for v in rel_speed_values])
 print("Composite SNR values to test:", [f"{s:.2f}" for s in snr_values])
 
-# Initialize RL Agent for adaptive SNR threshold selection
-print("\n=== Initializing RL Agent ===")
-rl_agent = RLAgent(
-    state_dim=3,  # (traditional SNR, distance, relative speed)
-    action_dim=10,  # 10 possible SNR threshold values (0-20 dB)
-    lr=0.001,
-    gamma=0.99,
-    epsilon_start=1.0,
-    epsilon_end=0.01,
-    epsilon_decay=0.995,
-    memory_size=10000,
-    batch_size=64,
-    target_update=10,
-    device=device
-)
-
-# Try to load pre-trained RL model if exists
-rl_model_path = './saved_models/rl_agent_snr_threshold.pkl'
-rl_agent.load_model(rl_model_path)
-
-print(f"RL Agent initialized with action space (SNR thresholds): {rl_agent.snr_thresholds}")
-print(f"Initial epsilon: {rl_agent.epsilon:.4f}\n")
+print("\n=== Initializing Fuzzy Controller ===")
 
 # Outer loop for different SNR values
 for snr_idx, snr in enumerate(snr_values):
@@ -291,10 +270,7 @@ for snr_idx, snr in enumerate(snr_values):
         rel_speed_values[snr_idx]
     ])
     
-    # RL agent selects optimal SNR threshold
-    action = rl_agent.select_action(current_state, training=True)
-    rl_snr_threshold = rl_agent.get_snr_threshold(action)
-    print(f"RL Agent selected SNR threshold: {rl_snr_threshold:.2f} dB (action: {action}, epsilon: {rl_agent.epsilon:.4f})")
+    pass
 
     # Load CIFAR-10 dataset
     train_set = datasets.CIFAR10('./datasets/cifar10', train=True, transform=data_tf, download=True)
@@ -424,8 +400,12 @@ for snr_idx, snr in enumerate(snr_values):
                 im = im.to(device)
                 label = label.to(device)
                 
-                # Adaptive transmission based on RL-selected SNR threshold
-                use_nn = snr < rl_snr_threshold
+                # Adaptive transmission based on fuzzy logic
+                use_nn = decide_use_nn(
+                    snr_trad_values[snr_idx],
+                    distance_values[snr_idx],
+                    rel_speed_values[snr_idx]
+                )
                 if use_nn:
                     # Use neural network for SNR < RL threshold
                     out = mlp_encoder(im, snr)
@@ -466,13 +446,7 @@ for snr_idx, snr in enumerate(snr_values):
                 acc = num_correct / im.shape[0]
                 train_acc += acc
                 
-                # RL: Accumulate metrics for reward computation (will compute reward at end of epoch)
-                # Store metrics for reward computation
-                if not hasattr(rl_agent, '_epoch_acc'):
-                    rl_agent._epoch_acc = []
-                    rl_agent._epoch_psnr = []
-                rl_agent._epoch_acc.append(acc)
-                rl_agent._epoch_psnr.append(psnr)
+                pass
 
                 # Save sample images periodically
                 if e % 10 == 0 and counter == 1:
@@ -496,31 +470,7 @@ for snr_idx, snr in enumerate(snr_values):
             train_loss = train_loss / counter
             psnr_aver = psnr_aver / counter
             
-            # RL: Compute reward based on epoch-averaged metrics and store transition
-            if hasattr(rl_agent, '_epoch_acc') and len(rl_agent._epoch_acc) > 0:
-                avg_epoch_acc = np.mean(rl_agent._epoch_acc)
-                avg_epoch_psnr = np.mean(rl_agent._epoch_psnr)
-                
-                # Compute reward based on averaged accuracy and PSNR
-                reward = rl_agent.compute_reward(avg_epoch_acc, avg_epoch_psnr, 
-                                                 use_nn=snr < rl_snr_threshold, 
-                                                 snr_threshold=rl_snr_threshold)
-                
-                # Next state is same as current state (we're in a stationary environment per SNR value)
-                next_state = current_state.copy()
-                done = False  # Episode continues
-                
-                # Store transition
-                rl_agent.store_transition(current_state, action, reward, next_state, done)
-                
-                # Train RL agent
-                rl_loss = rl_agent.train_step()
-                if rl_loss is not None and e % 5 == 0:  # Print every 5 epochs
-                    print(f"  RL Training Loss: {rl_loss:.6f}, Reward: {reward:.4f}, Avg Acc: {avg_epoch_acc:.4f}, Avg PSNR: {avg_epoch_psnr:.4f}")
-                
-                # Clear epoch metrics
-                rl_agent._epoch_acc = []
-                rl_agent._epoch_psnr = []
+            pass
 
             # Validation
             eval_loss = 0
@@ -534,8 +484,12 @@ for snr_idx, snr in enumerate(snr_values):
                     im = im.to(device)
                     label = label.to(device)
                     
-                    # Adaptive transmission based on RL-selected SNR threshold
-                    use_nn_eval = snr < rl_snr_threshold
+                    # Adaptive transmission based on fuzzy logic
+                    use_nn_eval = decide_use_nn(
+                        snr_trad_values[snr_idx],
+                        distance_values[snr_idx],
+                        rel_speed_values[snr_idx]
+                    )
                     if use_nn_eval:
                         # Use neural network for SNR < RL threshold
                         out = mlp_encoder(im, snr)
@@ -575,14 +529,13 @@ for snr_idx, snr in enumerate(snr_values):
                          psnr_aver))
 
             # Save model and results (only if using neural network)
-            # Check if we used neural network in this epoch (based on RL threshold)
-            use_nn_for_saving = snr < rl_snr_threshold
+            use_nn_for_saving = decide_use_nn(
+                snr_trad_values[snr_idx],
+                distance_values[snr_idx],
+                rel_speed_values[snr_idx]
+            )
             if use_nn_for_saving:
                 torch.save(mlp_encoder.state_dict(), ('saved_models/CIFAR_encoder_%f_snr_%.2f.pkl' % (compression_rate, snr)))
-            
-            # Save RL agent periodically
-            if (e + 1) % 5 == 0:
-                rl_agent.save_model(rl_model_path)
             
             # Save accuracy and PSNR results with SNR in filename
             file = ('./results/MLP_sem_CIFAR/acc_semantic_combining_%.2f_snr_%.2f.csv' % (
@@ -596,19 +549,15 @@ for snr_idx, snr in enumerate(snr_values):
             data = pd.DataFrame(eval_psnr)
             data.to_csv(file, index=False)
             # save the recovered image (only if using neural network)
-            # Check if we used neural network in this epoch (based on RL threshold)
-            use_nn_for_saving = snr < rl_snr_threshold
+            use_nn_for_saving = decide_use_nn(
+                snr_trad_values[snr_idx],
+                distance_values[snr_idx],
+                rel_speed_values[snr_idx]
+            )
             if use_nn_for_saving and out is not None:
                 for ii in range(min(len(out), 10)):  # Save only first 10 images to avoid too many files
                     pil_img = Image.fromarray(np.uint8(out[ii].detach().cpu().numpy().transpose(1, 2, 0) * 255))
                     pil_img.save(
                         "./image_recover_combination/cifar10/cifar_train_%d_%f_snr_%.2f.jpg" % (ii, compression_rate, snr))
-
-# Save final RL agent model
-rl_agent.save_model(rl_model_path)
-print("\n=== RL Agent Training Summary ===")
-print(f"Final epsilon: {rl_agent.epsilon:.4f}")
-print(f"Total experiences in buffer: {len(rl_agent.memory)}")
-print(f"Final SNR thresholds: {rl_agent.snr_thresholds}")
 
 print("\nAll experiments completed!")
