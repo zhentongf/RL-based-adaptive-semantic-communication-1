@@ -1,10 +1,37 @@
-Traditional SNR values to test: [32.78853596915768, 20.50021510445334, 25.500586367382386, 24.464214762976454, 34.72942428328025, 33.533989748458225, 37.84359135409691, 21.738776652588324, 28.43843639370541, 20.595944388761406]
-Distance values (m): ['22.6', '51.0', '3.6', '20.7', '65.3', '54.9', '22.8', '59.3', '81.1', '1.6']
-Relative speed values (m/s): ['20.1', '17.5', '8.5', '3.9', '23.9', '8.4', '2.3', '2.4', '21.2', '15.1']
-Composite SNR values to test: ['0.90', '-18.04', '11.64', '-3.27', '-6.88', '-3.92', '9.77', '-14.67', '-14.69', '12.29']
+Overview
 
-=== Initializing RL Agent ===
-No RL model found at ./saved_models/rl_agent_snr_threshold.pkl, starting from scratch
-RL Agent initialized with action space (SNR thresholds): [ 0.          2.22222222  4.44444444  6.66666667  8.88888889 11.11111111
- 13.33333333 15.55555556 17.77777778 20.        ]
-Initial epsilon: 1.0000
+- Replaced the RL-based threshold selection with a fuzzy logic controller that decides transmission mode ( use_nn ) directly from snr_trad_db , distance_m , and rel_speed_ms .
+- Added standalone fuzzy logic functions with clear docstrings and smooth trapezoidal/triangular membership functions.
+- Integrated fuzzy decision into training and evaluation paths in CIFAR.py .
+- Added unit tests covering boundary conditions and an optional performance comparison vs the existing RL agent.
+What Changed
+
+- Introduced a new module fuzzy_logic.py providing:
+  - membership_snr_db , membership_distance_m , membership_rel_speed_ms
+  - evaluate_rules
+  - decide_use_nn
+- Updated CIFAR.py to use fuzzy decision logic instead of RL:
+  - CIFAR.py:33 import replaced with from fuzzy_logic import decide_use_nn
+  - Training decision replaced at d:\fzt\github-mine\RL-based-adaptive-semantic-communication-1\CIFAR.py:428 :
+    - Old: use_nn = snr < rl_snr_threshold
+    - New: use_nn = decide_use_nn(snr_trad_values[snr_idx], distance_values[snr_idx], rel_speed_values[snr_idx])
+  - Evaluation decision replaced at CIFAR.py:538 similarly.
+  - Save gating replaced at CIFAR.py:579 and CIFAR.py:600 similarly.
+  - RL agent initialization, training, reward logic, and summary removed.
+Fuzzy Logic Design
+
+- Inputs:
+  - snr_trad_db in dB → memberships: low, medium, high
+  - distance_m → memberships: near, far
+  - rel_speed_ms → memberships: slow, fast
+- Memberships use overlapping trapezoidal and triangular functions to ensure smooth transitions and easy tuning:
+  - SNR low (0, 0, 15, 25) , medium (18, 28, 38) , high (30, 40, 60, 60)
+  - Distance near (0, 0, 20, 50) , far (30, 60, 200, 200)
+  - Speed slow (0, 0, 5, 15) , fast (10, 20, 50, 50)
+- Rules (min for AND, max for OR):
+  - Direct score = AND(high SNR, near distance, slow speed)
+  - Semantic score = OR(low SNR, far distance, fast speed)
+  - Smoothness: add medium-SNR variants to both sides for gradual behavior
+- Crisp decision:
+  - use_nn = semantic_score >= direct_score
+  - Ties favor semantic per the “low OR far OR fast → semantic” principle.
