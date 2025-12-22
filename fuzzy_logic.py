@@ -45,40 +45,62 @@ def membership_snr_db(snr_db: float,
     return {"low": low, "medium": med, "high": high}
 
 def membership_distance_m(dist_m: float,
-                          near_params: Tuple[float, float, float, float] = (0.0, 0.0, 20.0, 50.0),
-                          far_params: Tuple[float, float, float, float] = (30.0, 60.0, 200.0, 200.0)) -> Dict[str, float]:
+                          near_params: Tuple[float, float, float, float] = (0.0, 0.0, 20.0, 40.0),
+                          med_params: Tuple[float, float, float] = (30.0, 50.0, 70.0),
+                          far_params: Tuple[float, float, float, float] = (60.0, 80.0, 200.0, 200.0)) -> Dict[str, float]:
     """
-    Memberships for distance in meters: near, far.
-    Uses overlapping trapezoids to provide smooth transitions.
+    Memberships for distance in meters: near, medium, far.
+    Uses overlapping trapezoids and triangles to provide smooth transitions.
     """
     near = _trapmf(dist_m, *near_params)
+    med = _trimf(dist_m, *med_params)
     far = _trapmf(dist_m, *far_params)
-    return {"near": near, "far": far}
+    return {"near": near, "medium": med, "far": far}
 
 def membership_rel_speed_ms(rel_speed_ms: float,
-                            slow_params: Tuple[float, float, float, float] = (0.0, 0.0, 5.0, 15.0),
-                            fast_params: Tuple[float, float, float, float] = (10.0, 20.0, 50.0, 50.0)) -> Dict[str, float]:
+                            slow_params: Tuple[float, float, float, float] = (0.0, 0.0, 5.0, 10.0),
+                            med_params: Tuple[float, float, float] = (5.0, 12.5, 20.0),
+                            fast_params: Tuple[float, float, float, float] = (15.0, 25.0, 50.0, 50.0)) -> Dict[str, float]:
     """
-    Memberships for relative speed in m/s: slow, fast.
+    Memberships for relative speed in m/s: slow, medium, fast.
     """
     slow = _trapmf(rel_speed_ms, *slow_params)
+    med = _trimf(rel_speed_ms, *med_params)
     fast = _trapmf(rel_speed_ms, *fast_params)
-    return {"slow": slow, "fast": fast}
+    return {"slow": slow, "medium": med, "fast": fast}
 
 def evaluate_rules(mu_snr: Dict[str, float],
                    mu_dist: Dict[str, float],
                    mu_speed: Dict[str, float]) -> Tuple[float, float]:
     """
     Evaluate fuzzy rules and return (semantic_score, direct_score).
+    
     Rules:
-    - Direct when SNR high AND distance near AND speed slow.
-    - Semantic when SNR low OR distance far OR speed fast.
-    Smooth transitions by adding medium SNR variants to both sides.
+    - Direct (Good channel):
+        * High SNR AND Near Dist AND Slow Speed (Ideal)
+        * High SNR AND (Medium Dist OR Medium Speed) (SNR compensates)
+        * Medium SNR AND Near Dist AND Slow Speed (Conditions compensate)
+        
+    - Semantic (Poor channel):
+        * Low SNR OR Far Dist OR Fast Speed (Critical failures)
+        * Medium SNR AND (Medium/Far Dist OR Medium/Fast Speed) (Risky)
     """
+    # 1. Base Scores from extreme conditions
     direct = min(mu_snr.get("high", 0.0), mu_dist.get("near", 0.0), mu_speed.get("slow", 0.0))
     semantic = max(mu_snr.get("low", 0.0), mu_dist.get("far", 0.0), mu_speed.get("fast", 0.0))
+    
+    # 2. Add intermediate support for Direct (Good conditions compensating for medium ones)
+    # High SNR allows for Medium Distance OR Medium Speed
+    direct = max(direct, min(mu_snr.get("high", 0.0), mu_dist.get("medium", 0.0), mu_speed.get("slow", 0.0)))
+    direct = max(direct, min(mu_snr.get("high", 0.0), mu_dist.get("near", 0.0), mu_speed.get("medium", 0.0)))
+    # Medium SNR is okay if Distance is Near AND Speed is Slow
     direct = max(direct, min(mu_snr.get("medium", 0.0), mu_dist.get("near", 0.0), mu_speed.get("slow", 0.0)))
-    semantic = max(semantic, min(mu_snr.get("medium", 0.0), max(mu_dist.get("far", 0.0), mu_speed.get("fast", 0.0))))
+
+    # 3. Add intermediate support for Semantic (Medium conditions leaning to semantic)
+    # If SNR is Medium, any other Medium condition pushes towards Semantic to be safe
+    semantic = max(semantic, min(mu_snr.get("medium", 0.0), mu_dist.get("medium", 0.0)))
+    semantic = max(semantic, min(mu_snr.get("medium", 0.0), mu_speed.get("medium", 0.0)))
+    
     return float(semantic), float(direct)
 
 def decide_use_nn(snr_trad_db: float, distance_m: float, rel_speed_ms: float) -> bool:
