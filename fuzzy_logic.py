@@ -1,73 +1,72 @@
 import math
 from typing import Dict, Tuple
 
-def _trapmf(x: float, a: float, b: float, c: float, d: float) -> float:
-    """
-    Trapezoidal membership function.
-    Returns membership in [0, 1] for x given parameters (a <= b <= c <= d).
-    """
-    if x <= a or x >= d:
-        return 0.0
-    if b <= x <= c:
-        return 1.0
-    if a < x < b:
-        return (x - a) / (b - a)
-    if c < x < d:
-        return (d - x) / (d - c)
-    return 0.0
-
 def _trimf(x: float, a: float, b: float, c: float) -> float:
     """
     Triangular membership function.
     Returns membership in [0, 1] for x given parameters (a <= b <= c).
     """
-    if x <= a or x >= c:
-        return 0.0
     if x == b:
         return 1.0
+    if x <= a or x >= c:
+        return 0.0
     if a < x < b:
         return (x - a) / (b - a)
     if b < x < c:
         return (c - x) / (c - b)
     return 0.0
 
-def membership_snr_db(snr_db: float,
-                      low_params: Tuple[float, float, float, float] = (0.0, 0.0, 15.0, 25.0),
-                      med_params: Tuple[float, float, float] = (18.0, 28.0, 38.0),
-                      high_params: Tuple[float, float, float, float] = (30.0, 40.0, 60.0, 60.0)) -> Dict[str, float]:
-    """
-    Memberships for SNR in dB: low, medium, high.
-    Parameter tuples define trapezoids/triangle and can be tuned without code changes.
-    """
-    low = _trapmf(snr_db, *low_params)
-    med = _trimf(snr_db, *med_params)
-    high = _trapmf(snr_db, *high_params)
-    return {"low": low, "medium": med, "high": high}
+class BaseMembership:
+    """Base class for fuzzy membership functions with normalized inputs [0, 1]."""
+    def __init__(self):
+        # Normalized triangular parameters as requested
+        self.low_params = (0.0, 0.0, 0.5)
+        self.med_params = (0.0, 0.5, 1.0)
+        self.high_params = (0.5, 1.0, 1.0)
 
-def membership_distance_m(dist_m: float,
-                          near_params: Tuple[float, float, float, float] = (0.0, 0.0, 20.0, 40.0),
-                          med_params: Tuple[float, float, float] = (30.0, 50.0, 70.0),
-                          far_params: Tuple[float, float, float, float] = (60.0, 80.0, 200.0, 200.0)) -> Dict[str, float]:
-    """
-    Memberships for distance in meters: near, medium, far.
-    Uses overlapping trapezoids and triangles to provide smooth transitions.
-    """
-    near = _trapmf(dist_m, *near_params)
-    med = _trimf(dist_m, *med_params)
-    far = _trapmf(dist_m, *far_params)
-    return {"near": near, "medium": med, "far": far}
+    def _validate(self, x: float) -> float:
+        """Ensure input is within [0, 1] range."""
+        if not (0.0 <= x <= 1.0):
+            # Clamp or raise error? User asked for input validation. 
+            # We'll print a warning and clamp for robustness, or raise ValueError.
+            # Given it's a simulation, clamping is safer to avoid crash, but explicit validation implies check.
+            # I will clamp but warn if outside expected tolerance, or just clamp.
+            # Let's clamp to be safe for float inaccuracies.
+            return max(0.0, min(1.0, x))
+        return x
 
-def membership_rel_speed_ms(rel_speed_ms: float,
-                            slow_params: Tuple[float, float, float, float] = (0.0, 0.0, 5.0, 10.0),
-                            med_params: Tuple[float, float, float] = (5.0, 12.5, 20.0),
-                            fast_params: Tuple[float, float, float, float] = (15.0, 25.0, 50.0, 50.0)) -> Dict[str, float]:
-    """
-    Memberships for relative speed in m/s: slow, medium, fast.
-    """
-    slow = _trapmf(rel_speed_ms, *slow_params)
-    med = _trimf(rel_speed_ms, *med_params)
-    fast = _trapmf(rel_speed_ms, *fast_params)
-    return {"slow": slow, "medium": med, "fast": fast}
+    def get_memberships(self, x: float) -> Dict[str, float]:
+        raise NotImplementedError
+
+class SNRMembership(BaseMembership):
+    """Membership function for Normalized SNR (0=Low/Bad, 1=High/Good)."""
+    def get_memberships(self, x: float) -> Dict[str, float]:
+        x = self._validate(x)
+        return {
+            "low": _trimf(x, *self.low_params),      # Low SNR (Bad)
+            "medium": _trimf(x, *self.med_params),   # Medium SNR
+            "high": _trimf(x, *self.high_params)     # High SNR (Good)
+        }
+
+class DistanceMembership(BaseMembership):
+    """Membership function for Normalized Distance (0=Near/Good, 1=Far/Bad)."""
+    def get_memberships(self, x: float) -> Dict[str, float]:
+        x = self._validate(x)
+        return {
+            "near": _trimf(x, *self.low_params),     # Near (Good)
+            "medium": _trimf(x, *self.med_params),   # Medium
+            "far": _trimf(x, *self.high_params)      # Far (Bad)
+        }
+
+class SpeedMembership(BaseMembership):
+    """Membership function for Normalized Speed (0=Slow/Good, 1=Fast/Bad)."""
+    def get_memberships(self, x: float) -> Dict[str, float]:
+        x = self._validate(x)
+        return {
+            "slow": _trimf(x, *self.low_params),     # Slow (Good)
+            "medium": _trimf(x, *self.med_params),   # Medium
+            "fast": _trimf(x, *self.high_params)     # Fast (Bad)
+        }
 
 def evaluate_rules(mu_snr: Dict[str, float],
                    mu_dist: Dict[str, float],
@@ -86,7 +85,10 @@ def evaluate_rules(mu_snr: Dict[str, float],
         * Medium SNR AND (Medium/Far Dist OR Medium/Fast Speed) (Risky)
     """
     # 1. Base Scores from extreme conditions
+    # Direct: Good conditions (High SNR, Near Dist, Slow Speed)
     direct = min(mu_snr.get("high", 0.0), mu_dist.get("near", 0.0), mu_speed.get("slow", 0.0))
+    
+    # Semantic: Bad conditions (Low SNR, Far Dist, Fast Speed)
     semantic = max(mu_snr.get("low", 0.0), mu_dist.get("far", 0.0), mu_speed.get("fast", 0.0))
     
     # 2. Add intermediate support for Direct (Good conditions compensating for medium ones)
@@ -103,19 +105,25 @@ def evaluate_rules(mu_snr: Dict[str, float],
     
     return float(semantic), float(direct)
 
-def decide_use_nn(snr_trad_db: float, distance_m: float, rel_speed_ms: float) -> bool:
+def decide_use_nn(snr_norm: float, dist_norm: float, speed_norm: float) -> bool:
     """
-    Decide transmission mode using fuzzy logic.
-    Inputs:
-    - snr_trad_db: traditional SNR in dB
-    - distance_m: distance in meters
-    - rel_speed_ms: relative speed in m/s
+    Decide transmission mode using fuzzy logic with normalized inputs.
+    
+    Inputs (Normalized [0, 1]):
+    - snr_norm: 0 (Low/Bad) to 1 (High/Good)
+    - dist_norm: 0 (Near/Good) to 1 (Far/Bad)
+    - speed_norm: 0 (Slow/Good) to 1 (Fast/Bad)
+    
     Output:
     - True for semantic (NN-based) transmission, False for direct transmission.
     """
-    mu_snr = membership_snr_db(snr_trad_db)
-    mu_dist = membership_distance_m(distance_m)
-    mu_speed = membership_rel_speed_ms(rel_speed_ms)
+    snr_mem = SNRMembership()
+    dist_mem = DistanceMembership()
+    speed_mem = SpeedMembership()
+    
+    mu_snr = snr_mem.get_memberships(snr_norm)
+    mu_dist = dist_mem.get_memberships(dist_norm)
+    mu_speed = speed_mem.get_memberships(speed_norm)
+    
     semantic, direct = evaluate_rules(mu_snr, mu_dist, mu_speed)
     return semantic >= direct
-

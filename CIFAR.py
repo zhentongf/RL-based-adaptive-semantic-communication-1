@@ -234,9 +234,12 @@ def to_data(x):
 # Generate 10 random composite SNR values
 # First generate traditional SNR, distance, and relative speed
 random.seed(42)  # For reproducibility
-snr_trad_values = [random.uniform(20, 40) for _ in range(10)]
-distance_values = [random.uniform(1, 100) for _ in range(10)]  # 1 to 100 meters
-rel_speed_values = [random.uniform(0, 25) for _ in range(10)]  # 0 to 25 m/s (0 to 90 km/h)
+snr_trad_values_norm = [random.random() for _ in range(10)]  
+distance_values_norm = [random.random()for _ in range(10)]  
+rel_speed_values_norm = [random.random() for _ in range(10)]  
+snr_trad_values = [x * 20 + 20 for x in snr_trad_values_norm]  # Traditional SNR 20 to 40 dB
+distance_values = [x * 90 + 10 for x in distance_values_norm]  # 10 to 100 meters
+rel_speed_values = [x * 25 for x in rel_speed_values_norm]  # 0 to 25 m/s (0 to 90 km/h)
 
 # Compute composite SNR values
 snr_values = []
@@ -402,9 +405,9 @@ for snr_idx, snr in enumerate(snr_values):
                 
                 # Adaptive transmission based on fuzzy logic
                 use_nn = decide_use_nn(
-                    snr_trad_values[snr_idx],
-                    distance_values[snr_idx],
-                    rel_speed_values[snr_idx]
+                    snr_trad_values_norm[snr_idx],
+                    distance_values_norm[snr_idx],
+                    rel_speed_values_norm[snr_idx]
                 )
                 if use_nn:
                     # Use neural network for SNR < RL threshold
@@ -486,9 +489,9 @@ for snr_idx, snr in enumerate(snr_values):
                     
                     # Adaptive transmission based on fuzzy logic
                     use_nn_eval = decide_use_nn(
-                        snr_trad_values[snr_idx],
-                        distance_values[snr_idx],
-                        rel_speed_values[snr_idx]
+                        snr_trad_values_norm[snr_idx],
+                        distance_values_norm[snr_idx],
+                        rel_speed_values_norm[snr_idx]
                     )
                     if use_nn_eval:
                         # Use neural network for SNR < RL threshold
@@ -530,9 +533,9 @@ for snr_idx, snr in enumerate(snr_values):
 
             # Save model and results (only if using neural network)
             use_nn_for_saving = decide_use_nn(
-                snr_trad_values[snr_idx],
-                distance_values[snr_idx],
-                rel_speed_values[snr_idx]
+                snr_trad_values_norm[snr_idx],
+                distance_values_norm[snr_idx],
+                rel_speed_values_norm[snr_idx]
             )
             if use_nn_for_saving:
                 torch.save(mlp_encoder.state_dict(), ('saved_models/CIFAR_encoder_%f_snr_%.2f.pkl' % (compression_rate, snr)))
@@ -550,9 +553,9 @@ for snr_idx, snr in enumerate(snr_values):
             data.to_csv(file, index=False)
             # save the recovered image (only if using neural network)
             use_nn_for_saving = decide_use_nn(
-                snr_trad_values[snr_idx],
-                distance_values[snr_idx],
-                rel_speed_values[snr_idx]
+                snr_trad_values_norm[snr_idx],
+                distance_values_norm[snr_idx],
+                rel_speed_values_norm[snr_idx]
             )
             if use_nn_for_saving and out is not None:
                 for ii in range(min(len(out), 10)):  # Save only first 10 images to avoid too many files
