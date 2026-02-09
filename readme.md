@@ -1,2 +1,2 @@
 ### title of the paper
-reinforcement learning based   
+fuzzy logic based   
