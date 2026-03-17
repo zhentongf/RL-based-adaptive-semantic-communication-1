@@ -35,6 +35,10 @@ from fuzzy_logic import decide_use_nn
 # Suppress warnings for cleaner output
 warnings.filterwarnings("ignore")
 
+# --- Experiment Settings ---
+SUBSET_SIZE = 100  # Number of samples for quick verification. Set to None to use full dataset.
+# ---------------------------
+
 # --- helper: compute composite SNR in dB ---
 def compute_composite_snr_db(snr_trad_db, distance_m, rel_speed_ms,
                              d_ref=1.0, d_min=1.0,
@@ -231,15 +235,15 @@ def to_data(x):
         x = x.detach().cpu().numpy()
     return x
 
-# Generate 10 random composite SNR values
-# First generate traditional SNR, distance, and relative speed
-random.seed(42)  # For reproducibility
-snr_trad_values_norm = [random.random() for _ in range(10)]  
-distance_values_norm = [random.random()for _ in range(10)]  
-rel_speed_values_norm = [random.random() for _ in range(10)]  
-snr_trad_values = [x * 20 + 20 for x in snr_trad_values_norm]  # Traditional SNR 20 to 40 dB
-distance_values = [x * 90 + 10 for x in distance_values_norm]  # 10 to 100 meters
-rel_speed_values = [x * 25 for x in rel_speed_values_norm]  # 0 to 25 m/s (0 to 90 km/h)
+# load the composite SNR values from the file sim_data.csv
+import pandas as pd
+df = pd.read_csv('sim_data.csv')
+snr_trad_values = df['snr_values'].tolist()  # Traditional SNR 20 to 40 dB
+distance_values = df['distance_values'].tolist()  # 10 to 100 meters
+rel_speed_values = df['rel_speed_values'].tolist()  # 0 to 25 m/s (0 to 90 km/h)
+snr_trad_values_norm = df['snr_values_norm'].tolist()  # Traditional SNR 20 to 40 dB
+distance_values_norm = df['distance_values_norm'].tolist()  # 10 to 100 meters
+rel_speed_values_norm = df['rel_speed_values_norm'].tolist()  # 0 to 25 m/s (0 to 90 km/h)
 
 # Compute composite SNR values
 snr_values = []
@@ -263,7 +267,7 @@ print("Composite SNR values to test:", [f"{s:.2f}" for s in snr_values])
 print("\n=== Initializing Fuzzy Controller ===")
 
 # Outer loop for different SNR values
-for snr_idx, snr in enumerate(snr_values):
+for snr_idx, snr in enumerate(snr_trad_values):
     print(f"\n=== Testing SNR: {snr:.2f} dB ===")
     
     # Get current state for RL agent: (traditional SNR, distance, relative speed)
@@ -272,13 +276,20 @@ for snr_idx, snr in enumerate(snr_values):
         distance_values[snr_idx],
         rel_speed_values[snr_idx]
     ])
-    
-    pass
 
     # Load CIFAR-10 dataset
     train_set = datasets.CIFAR10('./datasets/cifar10', train=True, transform=data_tf, download=True)
+    if SUBSET_SIZE is not None and SUBSET_SIZE < len(train_set):
+        print(f"Subsetting training data to {SUBSET_SIZE} samples...")
+        train_set = torch.utils.data.Subset(train_set, range(SUBSET_SIZE))
     train_data = torch.utils.data.DataLoader(train_set, batch_size=64, shuffle=True)
+
     test_set = datasets.CIFAR10('./datasets/cifar10', train=False, transform=data_tf, download=True)
+    if SUBSET_SIZE is not None:
+        test_subset_size = max(1, SUBSET_SIZE // 10) # Maintain proportionality, at least 1
+        if test_subset_size < len(test_set):
+            print(f"Subsetting test data to {test_subset_size} samples...")
+            test_set = torch.utils.data.Subset(test_set, range(test_subset_size))
     test_data = torch.utils.data.DataLoader(test_set, batch_size=64, shuffle=False)
 
     # Initialize and load pretrained GoogleNet
@@ -292,7 +303,7 @@ for snr_idx, snr in enumerate(snr_values):
     criterion_classifier = nn.CrossEntropyLoss()
 
     # Test different compression rates
-    for rate in range(6, 10):
+    for rate in range(9, 10):
         compression_rate = min((rate + 1) * 0.1, 1)
         channel = max(np.sqrt(96 * (1 - compression_rate) / 3), 1)
         channel = int(channel)
@@ -410,7 +421,7 @@ for snr_idx, snr in enumerate(snr_values):
                     rel_speed_values_norm[snr_idx]
                 )
                 if use_nn:
-                    # Use neural network for SNR < RL threshold
+                    # Use neural network 
                     out = mlp_encoder(im, snr)
                 else:
                     # Copy raw image for SNR >= RL threshold
@@ -448,8 +459,6 @@ for snr_idx, snr in enumerate(snr_values):
                 num_correct = (pred == label).sum().item()
                 acc = num_correct / im.shape[0]
                 train_acc += acc
-                
-                pass
 
                 # Save sample images periodically
                 if e % 10 == 0 and counter == 1:
@@ -472,8 +481,6 @@ for snr_idx, snr in enumerate(snr_values):
             train_acc = train_acc / counter
             train_loss = train_loss / counter
             psnr_aver = psnr_aver / counter
-            
-            pass
 
             # Validation
             eval_loss = 0
@@ -494,7 +501,7 @@ for snr_idx, snr in enumerate(snr_values):
                         rel_speed_values_norm[snr_idx]
                     )
                     if use_nn_eval:
-                        # Use neural network for SNR < RL threshold
+                        # Use neural network 
                         out = mlp_encoder(im, snr)
                     else:
                         # Copy raw image for SNR >= RL threshold
