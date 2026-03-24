@@ -36,7 +36,7 @@ from fuzzy_logic import decide_use_nn
 warnings.filterwarnings("ignore")
 
 # --- Experiment Settings ---
-SUBSET_SIZE = 100  # Number of samples for quick verification. Set to None to use full dataset.
+SUBSET_SIZE = None  # Number of samples for quick verification. Set to None to use full dataset.
 # ---------------------------
 
 # --- helper: compute composite SNR in dB ---
