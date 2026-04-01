@@ -72,3 +72,15 @@ please give me the python code, so that I can run locally
 TVT TNSE TCOM TCCN IOT journal TITS TII JSAC
 
 ### 2026-03-18 - *3*
+增加会车情况
+
+### 2026-03-25 - *4*
+DOI: 10.1109/TVT.2024.3521948
+修改generate_sim_data_two_way.py里的函数generate_car_sim_data
+第一，把road_width的限制条件改为大于等于10，且为10的整数倍。
+第二，把number_cars改为必须大于等于road_width/10取整数再加1，即如果road_width=10，number_cars>=10/10+1，即number_cars大于2，以确保每条车道最少有1辆车。
+第三，把车辆平均分配到间距为10的车道（纵坐标Y）上，y坐标小于等于中值（road_width/2）的车道车辆向右行驶（x_start = 0），y坐标大于中值（road_width/2）的车道车辆向左行驶（x_start = road_length），例如road_width=20，road_width/2=10即为车道0（y = 0）,10（y = 10）车辆向右，车道20（y = 20）车辆向左，再假设number_cars=4，把
+v1,v2,v3,v4用循环地方式分配到3个车道上，v1车道0,v2车道10,v3车道20,v4车道0。
+第四，把车辆的速度由匀速改为变速，即每个时间段内的速度改为随机值random.choice(speeds_pool)，去掉num_time_points时间限制，把计算位置循环的结束条件改为最后一辆车驶出车道，即向右车辆的x_axis从0开始递增，向左车辆的x_axis从road_length开始递减。直到向右车辆的x_axis从0开始递增到全部车辆x_axis>=road_length，并且向左车辆的x_axis从road_length开始递减到全部车辆x_axis<=0时，退出循环，此时所有车辆驶出车道。
+
+### 2026-04-01 - *5*

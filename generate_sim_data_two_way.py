@@ -73,6 +73,17 @@ def generate_car_sim_data(number_cars=20, road_length=5000, road_width=10):
                     break
 
                 for car in cars:
+                    if car['finished']:
+                        speed = 0  # 如果车辆已经完成行驶，速度为0
+                        writer.writerow({
+                            "time": t,
+                            "car_ID": car["car_ID"],
+                            "x_axis": car["x_axis"],
+                            "y_axis": car["y_axis"],
+                            "speed": speed,
+                            "direction": car["direction"],
+                            "transmitter_SNR": car["transmitter_SNR"]
+                        })
                     if not car['finished']:
                         # 随机选择当前时间段的速度
                         speed = random.choice(speeds_pool)
