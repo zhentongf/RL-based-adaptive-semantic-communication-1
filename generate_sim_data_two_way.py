@@ -1,24 +1,24 @@
 import csv
 import random
 
-def generate_car_sim_data(number_cars=20, road_length=5000, road_width=10):
+def generate_car_sim_data(number_cars=20, road_length=5000, road_width=9):
     """
     生成车辆行驶模拟数据并保存为 CSV 文件。
     
     参数:
-    number_cars (int): 车辆总数 (>= road_width/10 + 1)
+    number_cars (int): 车辆总数 (>= road_width/3 + 1)
     road_length (int): 道路长度 (>= 100 且为 100 的倍数)
-    road_width (int): 道路宽度 (>= 10 且为 10 的倍数)
+    road_width (int): 道路宽度 (>= 3 且为 3 的倍数)
     """
     
     # 第一步：检查输入参数
-    if road_width < 10 or road_width % 10 != 0:
-        print("错误：road_width 必须大于等于 10，且为 10 的整数倍")
+    if road_width < 3 or road_width % 3 != 0:
+        print("错误：road_width 必须大于等于 3，且为 3 的整数倍")
         return
 
-    min_cars = int(road_width / 10) + 1
+    min_cars = int(road_width / 3) + 1
     if number_cars < min_cars:
-        print(f"错误：number_cars 必须大于等于 {min_cars} (road_width/10 + 1)")
+        print(f"错误：number_cars 必须大于等于 {min_cars} (road_width/3 + 1)")
         return
 
     if road_length < 100 or road_length % 100 != 0:
@@ -31,8 +31,8 @@ def generate_car_sim_data(number_cars=20, road_length=5000, road_width=10):
     snr_pool = [20, 30, 40]
     random.seed(42)
 
-    # 车道分配 (间距为 10)
-    lanes = list(range(0, road_width + 1, 10))
+    # 车道分配 (间距为 3)
+    lanes = list(range(0, road_width + 1, 3))
     mid_road = road_width / 2
 
     for i in range(number_cars):
@@ -72,34 +72,31 @@ def generate_car_sim_data(number_cars=20, road_length=5000, road_width=10):
                 if not active_cars:
                     break
 
-                for car in cars:
+                for i, car in enumerate(cars):
+                    # 判断车辆是否已经发车：第 i 辆车在 t >= i 时发车
+                    is_started = t >= i
+                    
                     if car['finished']:
                         speed = 0  # 如果车辆已经完成行驶，速度为0
-                        writer.writerow({
-                            "time": t,
-                            "car_ID": car["car_ID"],
-                            "x_axis": car["x_axis"],
-                            "y_axis": car["y_axis"],
-                            "speed": speed,
-                            "direction": car["direction"],
-                            "transmitter_SNR": car["transmitter_SNR"]
-                        })
-                    if not car['finished']:
-                        # 随机选择当前时间段的速度
+                    elif not is_started:
+                        speed = 0  # 如果车辆尚未发车，速度为0
+                    else:
+                        # 车辆已发车且未完成，随机选择当前时间段的速度
                         speed = random.choice(speeds_pool)
-                        
-                        # 写入当前时间点的数据 (位置是本秒初的位置)
-                        writer.writerow({
-                            "time": t,
-                            "car_ID": car["car_ID"],
-                            "x_axis": car["x_axis"],
-                            "y_axis": car["y_axis"],
-                            "speed": speed,
-                            "direction": car["direction"],
-                            "transmitter_SNR": car["transmitter_SNR"]
-                        })
 
-                        # 更新位置供下一秒使用
+                    # 写入当前时间点的数据 (位置是本秒初的位置)
+                    writer.writerow({
+                        "time": t,
+                        "car_ID": car["car_ID"],
+                        "x_axis": car["x_axis"],
+                        "y_axis": car["y_axis"],
+                        "speed": speed,
+                        "direction": car["direction"],
+                        "transmitter_SNR": car["transmitter_SNR"]
+                    })
+
+                    # 如果车辆已发车且未完成，则更新位置供下一秒使用
+                    if is_started and not car['finished']:
                         if car["direction"] == 0:
                             car["x_axis"] += speed
                             if car["x_axis"] >= road_length:
@@ -117,6 +114,6 @@ def generate_car_sim_data(number_cars=20, road_length=5000, road_width=10):
         print(f"写入 CSV 文件时出错: {e}")
 
 if __name__ == "__main__":
-    # 测试用例：4辆车，200m长，20m宽
-    generate_car_sim_data(number_cars=4, road_length=200, road_width=20)
+    # 测试用例：4辆车，200m长，9m宽
+    generate_car_sim_data(number_cars=4, road_length=200, road_width=9)
 
