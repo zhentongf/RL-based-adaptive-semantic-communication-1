@@ -114,6 +114,6 @@ def generate_car_sim_data(number_cars=20, road_length=5000, road_width=9):
         print(f"写入 CSV 文件时出错: {e}")
 
 if __name__ == "__main__":
-    # 测试用例：4辆车，200m长，9m宽
-    generate_car_sim_data(number_cars=4, road_length=200, road_width=9)
+    # 测试用例：20辆车，5000m长，9m宽
+    generate_car_sim_data(number_cars=20, road_length=5000, road_width=9)
 
