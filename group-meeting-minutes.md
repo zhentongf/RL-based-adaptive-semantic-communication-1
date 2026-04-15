@@ -84,3 +84,112 @@ v1,v2,v3,v4用循环地方式分配到3个车道上，v1车道0,v2车道10,v3车
 第四，把车辆的速度由匀速改为变速，即每个时间段内的速度改为随机值random.choice(speeds_pool)，去掉num_time_points时间限制，把计算位置循环的结束条件改为最后一辆车驶出车道，即向右车辆的x_axis从0开始递增，向左车辆的x_axis从road_length开始递减。直到向右车辆的x_axis从0开始递增到全部车辆x_axis>=road_length，并且向左车辆的x_axis从road_length开始递减到全部车辆x_axis<=0时，退出循环，此时所有车辆驶出车道。
 
 ### 2026-04-01 - *5*
+改进车道宽度
+### 2026-04-08 - *6*
+修改发车间隔
+### 2026-04-15 - *7*
+1. 模糊逻辑决策可视化
+
+生成了用于自适应传输的模糊决策系统的可视化图形。
+
+2. 综合信噪比（SNR）建模与可视化
+
+利用 `compute_composite_snr_db()` 函数对信道模型进行了分析。
+
+该模型综合考量了以下因素：
+距离衰减（对数距离路径损耗）
+相对速度惩罚（移动性效应）
+
+3. 自适应语义通信实验（CIFAR-10）
+
+设计了一套完整的仿真流程，用于评估自适应传输策略。
+
+实验设置
+数据集：CIFAR-10（测试集）
+模型：5个预训练的语义编码器，分别在不同的信噪比（SNR）条件下进行训练：
+10 dB、15 dB、17.5 dB、20 dB、25 dB
+信道数据：
+通过车辆仿真生成（`sim_data_two_way.csv`）
+经处理后提取为“最近车辆对”数据（`nearest_cars_data.csv`）
+传输策略
+
+对于每一个通信实例：
+
+利用模糊逻辑进行决策：
+语义传输（通过神经网络编码器）
+直接传输（原始数据 + 噪声）
+根据综合信噪比（SNR）添加相应的噪声
+评估指标
+准确率（Accuracy）：基于预训练的 GoogleNet 进行分类评估
+峰值信噪比（PSNR）：衡量重构质量
+结果输出
+
+实验结果保存至：
+`./results/transmission_cifar/transmission_cifar_data.csv`
+每一行数据包含：
+信道条件（SNR、距离、速度）
+决策结果（语义传输 / 直接传输）
+所使用的模型
+准确率与 PSNR 数值
+
+#### original manuscript
+Task 1, please write a python code for me to generate a schematic diagram for the result of fuzzy_logic.py which I uploaded. 
+1. generate 3 graphs, SNR is low (snr_norm=0), SNR is medium (snr_norm=0.5), SNR is high (snr_norm=1)
+2. the speed and distance are the x-axis and y-axis of each graph, use 0.25 as the axis label marking gap, .e.g 0 0.25 0.5 0.75 1.0
+3. divide the chart into small squares one by one, then paint them. semantic is red, direct is blue.
+4. the graphs should look like below tables. 
+
+SNR	low		
+speed\distance	near	medium	far
+slow	semantic	semantic	semantic
+medium	semantic	semantic	semantic
+fast	semantic	semantic	semantic
+SNR	medium		
+speed\distance	near	medium	far
+slow	direct	semantic	semantic
+medium	semantic	semantic	semantic
+fast	semantic	semantic	semantic
+SNR	high		
+speed\distance	near	medium	far
+slow	direct	direct	semantic
+medium	direct	direct	semantic
+fast	semantic	semantic	semantic
+
+Task 2, please help me draw 3 graphs for the function compute_composite_snr_db() in CIFAR.py
+1. we suppose snr_trad_db=40, please give me the python code to draw a 3D graph in which the speed and distance are the x-axis and y-axis, the distance range is between 0m and 100m, the relative speed range is between 0m/s and 50m/s. 
+2. generate the code to draw a 2D graph where snr_trad_db=40, distance_m=100, composite SNR decreases with speed.
+3. generate the code to draw a 2D graph where snr_trad_db=40, rel_speed_ms=50, composite SNR decreases with distance.
+
+Task 3, design experiment for adaptive semantic communication of image transmission.
+please design and generate code based on the training code in CIFAR.py
+please help me to design an experiment for adaptive semantic communication. 
+I want to simulate a transmission of images in cifar-10 dataset. please test it based on the test set.
+1. you can load the trained models from ./saved_models folder, for example, saved_models\CIFAR_encoder_1.000000_snr_10.00.pkl, I want you to test 5 models, namely 5 loops.
+CIFAR_encoder_1.000000_snr_10.00.pkl
+CIFAR_encoder_1.000000_snr_15.00.pkl
+CIFAR_encoder_1.000000_snr_17.50.pkl
+CIFAR_encoder_1.000000_snr_20.00.pkl
+CIFAR_encoder_1.000000_snr_25.00.pkl
+2. transmit the images through 2 different ways, using fuzzy_logic.py to decide when to use direct or semantic models.
+2.1 When go through direct channel, you add noise to the transmission process based on composite SNR which is computed in the function compute_composite_snr_db(). Please calculate the noise according to composite SNR.
+2.2 When go through semantic channel, you put the image through the trained models from ./saved_models folder.
+
+3. I generated car simulation data by generate_sim_data_two_way.py which created this file sim_data_two_way.csv.
+Then I generate nearest_cars_data.csv using the code find_nearest_cars.py. Please simulate the transmission using the data from nearest_cars_data.csv, below is the front 30 rows of the data.
+time,car_ID_TX,car_ID_RX,snr_values,distance_values,rel_speed_values,snr_values_norm,distance_values_norm,rel_speed_values_norm,composite_snr_db,use_nn
+10,v1,v2,40.0,20.22,20.0,1.0,0.2022,0.4,9.1116,False
+10,v1,v5,40.0,110.0,20.0,1.0,1.1,0.4,-5.5991,True
+10,v1,v6,40.0,190.02,10.0,1.0,1.9002,0.2,-8.5865,True
+10,v1,v9,40.0,260.0,10.0,1.0,2.6,0.2,-11.3098,True
+10,v1,v10,40.0,280.02,0.0,1.0,2.8002,0.0,-8.9437,True
+
+4. please calculate the accuracy and PSNR in each epoch, then save it into the folder ./results/transmission_cifar
+
+In conclusion, the experiment should look like below:
+  1st loop, 5 models
+    2dn loop, every line in the nearest_cars_data.csv
+	  if use_nn then
+	    3rd loop, loop every image of test set in cifar-10 dataset, transmit every image through semantic models.
+	  else
+	    3rd loop, loop every image of test set in cifar-10 dataset, transmit every image through direct with noise channel.
+	  add data to file ./results/transmission_cifar/transmission_cifar_data.csv, first copy all the columns in nearest_cars_data.csv, then add the calculated accuracy and psnr data to the file, that is to say to append column "accuracy" and column "psnr" to transmission_cifar_data.csv
