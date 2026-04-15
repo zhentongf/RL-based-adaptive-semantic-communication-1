@@ -2,6 +2,7 @@ import os
 import torch
 import numpy as np
 import pandas as pd
+import random
 from torch.utils.data import DataLoader
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
@@ -128,7 +129,15 @@ def data_tf(x):
     return torch.from_numpy(x)
 
 test_set = datasets.CIFAR10('./datasets/cifar10', train=False, transform=data_tf, download=True)
-test_loader = DataLoader(test_set, batch_size=64, shuffle=False)
+
+# Select 1000 random images from the test set
+random.seed(42)  # For reproducibility
+indices = list(range(len(test_set)))
+random.shuffle(indices)
+subset_indices = indices[:1000]
+test_subset = torch.utils.data.Subset(test_set, subset_indices)
+
+test_loader = DataLoader(test_subset, batch_size=64, shuffle=False)
 
 # =========================
 # Load simulation data
