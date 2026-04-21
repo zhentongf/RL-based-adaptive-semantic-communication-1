@@ -17,39 +17,43 @@ def draw_table(ax, snr_norm, title):
             row.append("semantic" if use_nn else "direct")
         table_data.append(row)
 
-    # Reverse rows for top-down display (slow on top)
-    table_data = table_data[::-1]
+    # Build full table content including labels (Shift indices right)
+    full_data = []
+    # Row 0: corner label + col_labels
+    full_data.append(["speed\\distance"] + col_labels)
+    # Rows 1-3: row_label + table_data
+    for i in range(len(row_labels)):
+        full_data.append([row_labels[i]] + table_data[i])
 
     # Create table
     table = ax.table(
-        cellText=table_data,
-        rowLabels=row_labels[::-1],
-        colLabels=col_labels,
+        cellText=full_data,
         loc='center',
         cellLoc='center'
     )
 
     # Style adjustments
-    table.scale(1.2, 1.8)
+    table.scale(1.4, 2.0)
 
     for (row, col), cell in table.get_celld().items():
         cell.set_edgecolor('black')
         cell.set_linewidth(1.2)
         cell.set_fontsize(10)
 
-        # Header styling
-        if row == 0 or col == -1:
+        # Header styling (Row 0 or Col 0)
+        if row == 0 or col == 0:
             cell.set_text_props(weight='bold')
+            cell.set_facecolor('#f2f2f2')  # light gray for headers
 
-        # Optional light shading (IEEE-friendly)
-        if row > 0 and col >= 0:
+        # Optional light shading (IEEE-friendly) for data cells
+        if row > 0 and col > 0:
             text = cell.get_text().get_text()
             if text == "semantic":
                 cell.set_facecolor('#f2f2f2')  # light gray
             else:
                 cell.set_facecolor('#ffffff')  # white
 
-    ax.set_title(title, fontsize=12, pad=10)
+    ax.set_title(title, fontsize=12, y=0.82, ha='center')
     ax.axis('off')
 
 
@@ -61,4 +65,5 @@ draw_table(axes[1], 0.5, "SNR = Medium")
 draw_table(axes[2], 1.0, "SNR = High")
 
 plt.tight_layout()
+plt.savefig('./graphs/fuzzy_logic_graph_img.png', dpi=300, bbox_inches='tight')
 plt.show()
