@@ -193,3 +193,11 @@ In conclusion, the experiment should look like below:
 	  else
 	    3rd loop, loop every image of test set in cifar-10 dataset, transmit every image through direct with noise channel.
 	  add data to file ./results/transmission_cifar/transmission_cifar_data.csv, first copy all the columns in nearest_cars_data.csv, then add the calculated accuracy and psnr data to the file, that is to say to append column "accuracy" and column "psnr" to transmission_cifar_data.csv
+
+### 2026-04-22 - *8*
+完全语义
+direct
+最近，random，相对速度最慢。
+
+### 2026-04-29 - *9*
+进行了消融实验，绘制了use_nn_true和use_nn_false两种状态下的数据散点图和折线图，对比了完全进行语义通信和完全进行有复合噪声的直接通信，目前实验结果不太理想。计划下一步继续改进实验流程，更改实验代码架构，进行encoder和decoder的联合训练，分开部署。
